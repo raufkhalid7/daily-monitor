@@ -294,7 +294,7 @@
   <div class="summary-grid">
     <div class="metric-card">
       <div class="metric-label">Total sites</div>
-      <div class="metric-value" id="total-val">7</div>
+      <div class="metric-value" id="total-val">9</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">Online</div>
@@ -308,6 +308,9 @@
 
   <div class="section-label">Website checks</div>
   <div class="sites-list" id="sites-list"></div>
+
+  <div class="section-label" style="margin-top: 2rem;">Quote form checks</div>
+  <div class="sites-list" id="forms-list"></div>
 </main>
 
 <footer>
@@ -325,7 +328,21 @@ const sites = [
   { name: "0508TempFence Website",  url: "https://www.0508tempfence.co.nz/" }
 ];
 
+const forms = [
+  {
+    name: "Temp Fence Auto Quote",
+    url: "https://www.temporaryfence.com.au/get-a-quote/",
+    keyword: "First Name"
+  },
+  {
+    name: "Dunnys Auto Quote",
+    url: "https://hireportabletoilets.com.au/instant-quote/",
+    keyword: "quote"
+  }
+];
+
 const state = {};
+const formState = {};
 
 function formatDateTime() {
   const d = new Date();
@@ -337,7 +354,43 @@ function formatTime() {
   return d.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
 }
 
-function renderList() {
+function renderForms() {
+  const list = document.getElementById('forms-list');
+  list.innerHTML = forms.map((f, i) => {
+    const st = formState[i] || 'checking';
+    const label = st === 'checking' ? 'Checking...' : st === 'ok' ? 'Form found' : 'Form missing';
+    const rt = formState['rt_' + i] ? formState['rt_' + i] + 'ms' : '';
+    return `
+      <div class="site-row ${st}">
+        <div class="site-left">
+          <div class="status-dot ${st}"></div>
+          <div>
+            <div class="site-name">${f.name}</div>
+            <div class="site-url">${f.url}</div>
+          </div>
+        </div>
+        <div class="site-right">
+          <div class="status-badge ${st}">${label}</div>
+          ${rt ? `<div class="response-time">${rt}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function checkForm(i) {
+  const t0 = Date.now();
+  try {
+    const resp = await fetch(forms[i].url, { mode: 'no-cors', cache: 'no-cache', signal: AbortSignal.timeout(10000) });
+    formState[i] = 'ok';
+    formState['rt_' + i] = Date.now() - t0;
+  } catch {
+    formState[i] = 'error';
+  }
+  renderForms();
+  updateSummary();
+}
+
+
   const list = document.getElementById('sites-list');
   list.innerHTML = sites.map((s, i) => {
     const st = state[i] || 'checking';
@@ -361,9 +414,11 @@ function renderList() {
 }
 
 function updateSummary() {
-  const vals = Object.keys(state).filter(k => !k.startsWith('rt_')).map(k => state[k]);
-  const online = vals.filter(v => v === 'ok').length;
-  const offline = vals.filter(v => v === 'error').length;
+  const siteVals = Object.keys(state).filter(k => !k.startsWith('rt_')).map(k => state[k]);
+  const formVals = Object.keys(formState).filter(k => !k.startsWith('rt_')).map(k => formState[k]);
+  const allVals = [...siteVals, ...formVals];
+  const online = allVals.filter(v => v === 'ok').length;
+  const offline = allVals.filter(v => v === 'error').length;
   document.getElementById('online-val').textContent = online || '—';
   document.getElementById('offline-val').textContent = offline || '—';
 }
@@ -387,20 +442,25 @@ async function runChecks() {
   btn.classList.add('spinning');
 
   sites.forEach((_, i) => { delete state[i]; delete state['rt_' + i]; });
+  forms.forEach((_, i) => { delete formState[i]; delete formState['rt_' + i]; });
   renderList();
+  renderForms();
   document.getElementById('online-val').textContent = '—';
   document.getElementById('offline-val').textContent = '—';
   document.getElementById('last-checked').textContent = 'Checking...';
 
-  await Promise.all(sites.map((_, i) => checkSite(i)));
+  await Promise.all([
+    ...sites.map((_, i) => checkSite(i)),
+    ...forms.map((_, i) => checkForm(i))
+  ]);
 
-  const now = new Date();
   document.getElementById('last-checked').textContent = 'Last checked ' + formatTime();
   btn.disabled = false;
   btn.classList.remove('spinning');
 }
 
 document.getElementById('page-date').textContent = formatDateTime();
+renderForms();
 runChecks();
 </script>
 </body>
