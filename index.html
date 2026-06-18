@@ -379,15 +379,24 @@ function renderForms() {
 
 async function checkForm(i) {
   const t0 = Date.now();
-  try {
-    const resp = await fetch(forms[i].url, { mode: 'no-cors', cache: 'no-cache', signal: AbortSignal.timeout(10000) });
-    formState[i] = 'ok';
-    formState['rt_' + i] = Date.now() - t0;
-  } catch {
-    formState[i] = 'error';
-  }
-  renderForms();
-  updateSummary();
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = setTimeout(() => {
+      formState[i] = 'error';
+      renderForms();
+      updateSummary();
+      resolve();
+    }, 8000);
+    img.onload = img.onerror = () => {
+      clearTimeout(timer);
+      formState[i] = 'ok';
+      formState['rt_' + i] = Date.now() - t0;
+      renderForms();
+      updateSummary();
+      resolve();
+    };
+    img.src = forms[i].url + 'favicon.ico?_=' + t0;
+  });
 }
 
 
@@ -425,15 +434,24 @@ function updateSummary() {
 
 async function checkSite(i) {
   const t0 = Date.now();
-  try {
-    await fetch(sites[i].url, { method: 'HEAD', mode: 'no-cors', cache: 'no-cache', signal: AbortSignal.timeout(8000) });
-    state[i] = 'ok';
-    state['rt_' + i] = Date.now() - t0;
-  } catch {
-    state[i] = 'error';
-  }
-  renderList();
-  updateSummary();
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = setTimeout(() => {
+      state[i] = 'error';
+      renderList();
+      updateSummary();
+      resolve();
+    }, 8000);
+    img.onload = img.onerror = () => {
+      clearTimeout(timer);
+      state[i] = 'ok';
+      state['rt_' + i] = Date.now() - t0;
+      renderList();
+      updateSummary();
+      resolve();
+    };
+    img.src = sites[i].url + 'favicon.ico?_=' + t0;
+  });
 }
 
 async function runChecks() {
