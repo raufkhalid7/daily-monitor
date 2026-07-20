@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Monitoring Summary</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #181b23; --surface2: #1f2330;
+      --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
+      --text: #eef0f4; --muted: #7b8094;
+      --green: #22c55e; --green-bg: rgba(34,197,94,0.1); --green-border: rgba(34,197,94,0.25);
+      --red: #ef4444; --red-bg: rgba(239,68,68,0.1); --red-border: rgba(239,68,68,0.25);
+      --gray: #7b8094; --gray-bg: rgba(123,128,148,0.1); --gray-border: rgba(123,128,148,0.25);
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; }
+    header {
+      border-bottom: 1px solid var(--border); padding: 1.25rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; background: rgba(15,17,23,0.92);
+      backdrop-filter: blur(12px); z-index: 10;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; }
+    .logo-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 8px var(--green)} 50%{opacity:.6;box-shadow:0 0 4px var(--green)} }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .last-checked { font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+    .refresh-btn {
+      background: var(--surface2); border: 1px solid var(--border2); color: var(--text);
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer;
+      display: flex; align-items: center; gap: 6px; transition: background 0.15s;
+    }
+    .refresh-btn:hover { background: #2a2f3f; }
+    .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .refresh-icon { width: 14px; height: 14px; }
+    .refresh-btn.spinning .refresh-icon { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    main { max-width: 820px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+    .page-title { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin-bottom: 4px; }
+    .page-subtitle { font-size: 14px; color: var(--muted); margin-bottom: 2rem; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 2rem; }
+    .metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; }
+    .metric-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
+    .metric-value { font-size: 28px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+    .metric-value.green { color: var(--green); }
+    .metric-value.red { color: var(--red); }
+    .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px; padding-left: 2px; }
+    .sites-list { display: flex; flex-direction: column; gap: 8px; }
+    .site-row {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;
+      transition: border-color 0.2s;
+    }
+    .site-row:hover { border-color: var(--border2); }
+    .site-row.ok { border-left: 3px solid var(--green); }
+    .site-row.error { border-left: 3px solid var(--red); }
+    .site-row.checking { border-left: 3px solid var(--border2); }
+    .site-row.skipped { border-left: 3px solid var(--gray); }
+    .site-left { display: flex; align-items: center; gap: 12px; }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+    .status-dot.error { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+    .status-dot.checking { background: var(--muted); animation: blink 1s ease-in-out infinite; }
+    .status-dot.skipped { background: var(--gray); }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .site-name { font-size: 14px; font-weight: 500; }
+    .site-url { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+    .status-badge { font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: 20px; font-family: 'JetBrains Mono', monospace; }
+    .status-badge.ok { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+    .status-badge.error { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+    .status-badge.checking { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .status-badge.skipped { background: var(--gray-bg); color: var(--gray); border: 1px solid var(--gray-border); }
+    .response-time { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; text-align: right; }
+    .site-right { text-align: right; }
+    footer { text-align: center; padding: 2rem; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); margin-top: 2rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Daily Monitor
+  </div>
+  <div class="header-right">
+    <span class="last-checked" id="last-checked">Not yet checked</span>
+    <button class="refresh-btn" id="refresh-btn" onclick="runChecks()">
+      <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+</header>
+
+<main>
+  <h1 class="page-title">Daily Monitoring Summary</h1>
+  <p class="page-subtitle" id="page-date">Loading...</p>
+
+  <div class="summary-grid">
+    <div class="metric-card">
+      <div class="metric-label">Total checks</div>
+      <div class="metric-value" id="total-val">29</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Online</div>
+      <div class="metric-value green" id="online-val">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Offline</div>
+      <div class="metric-value red" id="offline-val">—</div>
+    </div>
+  </div>
+
+  <div class="section-label">Website checks</div>
+  <div class="sites-list" id="sites-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Quote form checks</div>
+  <div class="sites-list" id="forms-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Mailchimp checks</div>
+  <div class="sites-list" id="mailchimp-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Stripe checks</div>
+  <div class="sites-list" id="stripe-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Zoho CRM checks</div>
+  <div class="sites-list" id="zoho-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Auto Reports checks</div>
+  <div class="sites-list" id="autoreports-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Email checks</div>
+  <div class="sites-list" id="email-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Pre-Payment checks</div>
+  <div class="sites-list" id="prepayment-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Auto Invoice checks</div>
+  <div class="sites-list" id="autoinvoice-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">RDS checks</div>
+  <div class="sites-list" id="rds-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">HIO Login checks</div>
+  <div class="sites-list" id="hio-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">HIO &amp; Dear Sync to Zoho BI checks</div>
+  <div class="sites-list" id="zohobi-sync-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Subcontractor Portal checks</div>
+  <div class="sites-list" id="scportal-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">Hermes Bot checks</div>
+  <div class="sites-list" id="hermes-list"></div>
+
+  <div class="section-label" style="margin-top:2rem">HIO Layout checks</div>
+  <div class="sites-list" id="marty-invoices-list"></div>
+</main>
+
+<footer>Auto-checks on load · Refresh anytime · Built for raufkhalid7</footer>
+
+<script>
+const WORKER = 'https://fragrant-dream-4efb.rauf-d25.workers.dev';
+
+const sites = [
+  { name: "SiteHQ Website",       url: "https://www.sitehq.com.au/" },
+  { name: "1300TF Website",        url: "https://www.temporaryfence.com.au/" },
+  { name: "1300Hoarding Website",  url: "https://www.1300hoarding.com.au/" },
+  { name: "1300SiteCam Website",   url: "https://www.1300sitecam.com.au/" },
+  { name: "1300Dunnys Website",    url: "https://hireportabletoilets.com.au/" },
+  { name: "SignageHQ Website",     url: "https://signagehq.com.au/" },
+  { name: "0508TempFence Website", url: "https://www.0508tempfence.co.nz/" },
+  { name: "OFX",                   url: "https://secure.ofx.com" },
+  { name: "Zoho BI",               url: "https://accounts.zoho.com/signin?servicename=ZohoReports&signupurl=https://www.zoho.com/analytics/signup.html" }
+];
+
+const forms = [
+  { name: "Temp Fence Auto Quote", url: "https://www.temporaryfence.com.au/get-a-quote/" },
+  { name: "Dunnys Auto Quote",     url: "https://hireportabletoilets.com.au/instant-quote/" }
+];
+
+const state = {};
+const formState = {};
+let mailchimpState   = { status: 'checking', label: '', detail: '' };
+let stripeState      = { status: 'checking', label: '', detail: '' };
+let zohoState        = { status: 'checking', label: '', detail: '' };
+let autoReportsState = { status: 'checking', label: '', detail: '' };
+let unpaidTasksState = { status: 'checking', label: '', detail: '' };
+let prePaymentState  = { status: 'checking', label: '', detail: '' };
+let autoInvoiceState = { status: 'checking', label: '', detail: '' };
+let rdsState         = { status: 'checking', label: '', detail: '' };
+let hioAUState       = { status: 'checking', label: '', detail: '' };
+let hioNZState       = { status: 'checking', label: '', detail: '' };
+let hioBISyncState   = { status: 'checking', label: '', detail: '' };
+let dearBISyncState  = { status: 'checking', label: '', detail: '' };
+let scPortalState    = { status: 'checking', label: '', detail: '' };
+let hermesState      = { status: 'checking', label: '', detail: '' };
+let martyInvoicesState  = { status: 'checking', label: '', detail: '' };
+let martyToiletState    = { status: 'checking', label: '', detail: '' };
+let martyRehiresState   = { status: 'checking', label: '', detail: '' };
+let martyRehires3mState = { status: 'checking', label: '', detail: '' };
+
+function isWeekend() {
+  const day = new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Sydney', weekday: 'long' });
+  return day === 'Saturday' || day === 'Sunday';
+}
+
+function formatDateTime() {
+  return new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+
+function formatTime() {
+  return new Date().toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function rowHTML(name, url, st, rt) {
+  const labels = { checking: 'Checking...', ok: 'Online', error: 'Offline' };
+  return `<div class="site-row ${st}">
+    <div class="site-left"><div class="status-dot ${st}"></div>
+      <div><div class="site-name">${name}</div><div class="site-url">${url}</div></div>
+    </div>
+    <div class="site-right">
+      <div class="status-badge ${st}">${labels[st]}</div>
+      ${rt ? `<div class="response-time">${rt}ms</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function formRowHTML(name, url, st, rt) {
+  const labels = { checking: 'Checking...', ok: 'Form found', error: 'Form missing' };
+  return `<div class="site-row ${st}">
+    <div class="site-left"><div class="status-dot ${st}"></div>
+      <div><div class="site-name">${name}</div><div class="site-url">${url}</div></div>
+    </div>
+    <div class="site-right">
+      <div class="status-badge ${st}">${labels[st]}</div>
+      ${rt ? `<div class="response-time">${rt}ms</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function apiRowHTML(name, st, label, detail) {
+  return `<div class="site-row ${st}">
+    <div class="site-left"><div class="status-dot ${st}"></div>
+      <div><div class="site-name">${name}</div><div class="site-url">${detail}</div></div>
+    </div>
+    <div class="site-right"><div class="status-badge ${st}">${label}</div></div>
+  </div>`;
+}
+
+function renderAll() {
+  document.getElementById('sites-list').innerHTML = sites.map((s,i) =>
+    rowHTML(s.name, s.url, state[i] || 'checking', state['rt'+i] || null)
+  ).join('');
+  document.getElementById('forms-list').innerHTML = forms.map((f,i) =>
+    formRowHTML(f.name, f.url, formState[i] || 'checking', formState['rt'+i] || null)
+  ).join('');
+  document.getElementById('mailchimp-list').innerHTML =
+    apiRowHTML('Mailchimp — AU Marketing contacts', mailchimpState.status, mailchimpState.label, mailchimpState.detail);
+  document.getElementById('stripe-list').innerHTML =
+    apiRowHTML('Stripe — Latest successful payment', stripeState.status, stripeState.label, stripeState.detail);
+  document.getElementById('zoho-list').innerHTML =
+    apiRowHTML('Zoho CRM — Latest HIO Quoting record', zohoState.status, zohoState.label, zohoState.detail);
+  document.getElementById('autoreports-list').innerHTML =
+    apiRowHTML('Auto Reports — AU + NZ HIO REPORTS', autoReportsState.status, autoReportsState.label, autoReportsState.detail);
+  document.getElementById('email-list').innerHTML =
+    apiRowHTML('Unpaid Scheduled Tasks email', unpaidTasksState.status, unpaidTasksState.label, unpaidTasksState.detail);
+  document.getElementById('prepayment-list').innerHTML =
+    apiRowHTML('Pre-Payment Email Failures', prePaymentState.status, prePaymentState.label, prePaymentState.detail);
+  document.getElementById('autoinvoice-list').innerHTML =
+    apiRowHTML('Auto Invoice Processing Report', autoInvoiceState.status, autoInvoiceState.label, autoInvoiceState.detail);
+  document.getElementById('rds-list').innerHTML =
+    apiRowHTML('RDS Server (10.0.0.9)', rdsState.status, rdsState.label, rdsState.detail);
+  document.getElementById('hio-list').innerHTML =
+    apiRowHTML('HIO AU', hioAUState.status, hioAUState.label, hioAUState.detail) +
+    apiRowHTML('HIO NZ', hioNZState.status, hioNZState.label, hioNZState.detail);
+  document.getElementById('zohobi-sync-list').innerHTML =
+    apiRowHTML('HIO AU Sync', hioBISyncState.status, hioBISyncState.label, hioBISyncState.detail) +
+    apiRowHTML('Dear AU Sync', dearBISyncState.status, dearBISyncState.label, dearBISyncState.detail);
+  document.getElementById('scportal-list').innerHTML =
+    apiRowHTML('Subcontractor Portal', scPortalState.status, scPortalState.label, scPortalState.detail);
+  document.getElementById('hermes-list').innerHTML =
+    apiRowHTML('Hermes Bot', hermesState.status, hermesState.label, hermesState.detail);
+  document.getElementById('marty-invoices-list').innerHTML =
+    apiRowHTML('Marty Invoices Not Sent', martyInvoicesState.status, martyInvoicesState.label, martyInvoicesState.detail) +
+    apiRowHTML('Marty Toilet Undercharges', martyToiletState.status, martyToiletState.label, martyToiletState.detail) +
+    apiRowHTML('Marty Bot Rehires', martyRehiresState.status, martyRehiresState.label, martyRehiresState.detail) +
+    apiRowHTML('Marty Bot Rehires 3m28days', martyRehires3mState.status, martyRehires3mState.label, martyRehires3mState.detail);
+}
+
+function updateSummary() {
+  const all = [
+    ...sites.map((_,i) => state[i]),
+    ...forms.map((_,i) => formState[i]),
+    mailchimpState.status === 'checking' ? null : mailchimpState.status,
+    stripeState.status === 'checking' ? null : stripeState.status,
+    zohoState.status === 'checking' ? null : zohoState.status,
+    autoReportsState.status === 'checking' ? null : autoReportsState.status,
+    (unpaidTasksState.status === 'checking' || unpaidTasksState.status === 'skipped') ? null : unpaidTasksState.status,
+    (prePaymentState.status === 'checking' || prePaymentState.status === 'skipped') ? null : prePaymentState.status,
+    (autoInvoiceState.status === 'checking' || autoInvoiceState.status === 'skipped') ? null : autoInvoiceState.status,
+    (rdsState.status === 'checking' || rdsState.status === 'unknown') ? null : rdsState.status,
+    (hioAUState.status === 'checking' || hioAUState.status === 'unknown') ? null : hioAUState.status,
+    (hioNZState.status === 'checking' || hioNZState.status === 'unknown') ? null : hioNZState.status,
+    (hioBISyncState.status === 'checking' || hioBISyncState.status === 'unknown') ? null : hioBISyncState.status,
+    (dearBISyncState.status === 'checking' || dearBISyncState.status === 'unknown') ? null : dearBISyncState.status,
+    scPortalState.status === 'checking' ? null : scPortalState.status,
+    hermesState.status === 'checking' ? null : hermesState.status,
+    (martyInvoicesState.status === 'checking' || martyInvoicesState.status === 'unknown') ? null : martyInvoicesState.status,
+    (martyToiletState.status === 'checking' || martyToiletState.status === 'unknown') ? null : martyToiletState.status,
+    (martyRehiresState.status === 'checking' || martyRehiresState.status === 'unknown') ? null : martyRehiresState.status,
+    (martyRehires3mState.status === 'checking' || martyRehires3mState.status === 'unknown') ? null : martyRehires3mState.status
+  ].filter(Boolean);
+  document.getElementById('online-val').textContent = all.filter(v => v === 'ok').length || '—';
+  document.getElementById('offline-val').textContent = all.filter(v => v === 'error').length || '—';
+}
+
+function pingURL(url) {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const img = new Image();
+    let done = false;
+    const finish = (ok) => { if (done) return; done = true; resolve({ ok, ms: Date.now() - t0 }); };
+    img.onload = () => finish(true);
+    img.onerror = () => finish(true);
+    setTimeout(() => finish(false), 9000);
+    img.src = url + (url.endsWith('/') ? '' : '/') + 'favicon.ico?t=' + Date.now();
+  });
+}
+
+async function checkSite(i) {
+  const { ok, ms } = await pingURL(sites[i].url);
+  state[i] = ok ? 'ok' : 'error';
+  if (ok) state['rt'+i] = ms;
+  renderAll(); updateSummary();
+}
+
+async function checkForm(i) {
+  const { ok, ms } = await pingURL(forms[i].url);
+  formState[i] = ok ? 'ok' : 'error';
+  if (ok) formState['rt'+i] = ms;
+  renderAll(); updateSummary();
+}
+
+async function checkMailchimp() {
+  try {
+    const resp = await fetch(WORKER + '?service=mailchimp');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    const members = data.members || [];
+    if (members.length === 0) {
+      mailchimpState = { status: 'error', label: 'No contacts', detail: 'No contacts found in AU Marketing' };
+    } else {
+      const lastAdded = new Date(members[0].last_changed || members[0].timestamp_opt);
+      const diffHours = (Date.now() - lastAdded) / (1000 * 60 * 60);
+      const dateStr = lastAdded.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      mailchimpState = diffHours <= 48
+        ? { status: 'ok', label: 'Up to date', detail: 'Last contact added: ' + dateStr }
+        : { status: 'error', label: 'Stale', detail: 'Last contact added: ' + dateStr + ' (over 48hrs ago)' };
+    }
+  } catch (e) {
+    mailchimpState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkStripe() {
+  try {
+    const resp = await fetch(WORKER + '?service=stripe');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    const charges = data.data || [];
+    if (charges.length === 0) {
+      stripeState = { status: 'error', label: 'No payments', detail: 'No successful payments found' };
+    } else {
+      const lastPayment = new Date(charges[0].created * 1000);
+      const diffHours = (Date.now() - lastPayment) / (1000 * 60 * 60);
+      const dateStr = lastPayment.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      stripeState = diffHours <= 48
+        ? { status: 'ok', label: 'Up to date', detail: 'Last payment: ' + dateStr }
+        : { status: 'error', label: 'Stale', detail: 'Last payment: ' + dateStr + ' (over 48hrs ago)' };
+    }
+  } catch (e) {
+    stripeState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkZoho() {
+  try {
+    const resp = await fetch(WORKER + '?service=zoho');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    const records = (data.data || []).filter(r => r.DearOrderRef && r.DearOrderRef.startsWith('HIO'));
+    if (records.length === 0) {
+      zohoState = { status: 'error', label: 'No HIO records', detail: 'No HIO quoting records found' };
+    } else {
+      const lastCreated = new Date(records[0].Created_Time);
+      const now = new Date();
+      let expectedDate = new Date(now);
+      const day = now.getDay();
+      if (day === 1) expectedDate.setDate(expectedDate.getDate() - 3);
+      else if (day === 0) expectedDate.setDate(expectedDate.getDate() - 2);
+      else if (day === 6) expectedDate.setDate(expectedDate.getDate() - 1);
+      else expectedDate.setDate(expectedDate.getDate() - 1);
+      expectedDate.setHours(0, 0, 0, 0);
+      const dateStr = lastCreated.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      zohoState = lastCreated >= expectedDate
+        ? { status: 'ok', label: 'Up to date', detail: 'Last HIO quote: ' + dateStr }
+        : { status: 'error', label: 'Stale', detail: 'Last HIO quote: ' + dateStr + ' (older than last working day)' };
+    }
+  } catch (e) {
+    zohoState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkAutoReports() {
+  try {
+    const resp = await fetch(WORKER + '?service=onedrive');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    autoReportsState = data.status === 'ok'
+      ? { status: 'ok', label: 'Up to date', detail: data.lastModified }
+      : { status: 'error', label: 'Stale', detail: data.message || 'Files not updated recently' };
+  } catch (e) {
+    autoReportsState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+function formatMelbTime(isoString) {
+  if (!isoString) return '—';
+  try {
+    return new Date(isoString).toLocaleTimeString('en-AU', {
+      timeZone: 'Australia/Melbourne',
+      hour: '2-digit', minute: '2-digit', hour12: true
+    });
+  } catch (e) {
+    return new Date(isoString).toUTCString().slice(17, 22);
+  }
+}
+
+async function checkUnpaidTasks() {
+  if (isWeekend()) {
+    unpaidTasksState = { status: 'skipped', label: 'Not expected today', detail: 'No email on weekends' };
+    renderAll(); updateSummary();
+    return;
+  }
+  try {
+    const resp = await fetch(WORKER + '?service=mail');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    unpaidTasksState = data.received
+      ? { status: 'ok', label: 'Received', detail: 'Arrived ' + (data.when === 'today' ? 'today' : 'yesterday') }
+      : { status: 'error', label: 'Not received', detail: 'Email not found today or yesterday' };
+  } catch (e) {
+    unpaidTasksState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkPrePayment() {
+  if (isWeekend()) {
+    prePaymentState = { status: 'skipped', label: 'Not expected today', detail: 'No email on weekends' };
+    renderAll(); updateSummary();
+    return;
+  }
+  try {
+    const resp = await fetch(WORKER + '?service=prepayment');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    prePaymentState = data.received
+      ? { status: 'ok', label: 'Received', detail: 'Arrived ' + data.when }
+      : { status: 'error', label: 'Not received', detail: 'Email not found for previous weekday' };
+  } catch (e) {
+    prePaymentState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkAutoInvoice() {
+  if (isWeekend()) {
+    autoInvoiceState = { status: 'skipped', label: 'Not expected today', detail: 'No email on weekends' };
+    renderAll(); updateSummary();
+    return;
+  }
+  try {
+    const resp = await fetch(WORKER + '?service=autoinvoice');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    autoInvoiceState = data.received
+      ? { status: 'ok', label: 'Received', detail: 'Arrived ' + data.when }
+      : { status: 'error', label: 'Not received', detail: 'Email not found for previous weekday' };
+  } catch (e) {
+    autoInvoiceState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkRDS() {
+  try {
+    const resp = await fetch(WORKER + '?service=rds');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      rdsState = { status: 'ok', label: 'Online', detail: 'Last checked: ' + data.dateStr };
+    } else if (data.status === 'error') {
+      rdsState = { status: 'error', label: 'Offline', detail: 'Last checked: ' + data.dateStr };
+    } else {
+      rdsState = { status: 'checking', label: 'Unknown', detail: data.message || 'No data received yet' };
+    }
+  } catch (e) {
+    rdsState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkHIOAU() {
+  try {
+    const resp = await fetch(WORKER + '?service=hio-au');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      hioAUState = { status: 'ok', label: 'Online', detail: '' };
+    } else if (data.status === 'error') {
+      hioAUState = { status: 'error', label: 'Offline', detail: '' };
+    } else {
+      hioAUState = { status: 'checking', label: 'Unknown', detail: data.message || 'No data received yet' };
+    }
+  } catch (e) {
+    hioAUState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkHIONZ() {
+  try {
+    const resp = await fetch(WORKER + '?service=hio-nz');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      hioNZState = { status: 'ok', label: 'Online', detail: '' };
+    } else if (data.status === 'error') {
+      hioNZState = { status: 'error', label: 'Offline', detail: '' };
+    } else {
+      hioNZState = { status: 'checking', label: 'Unknown', detail: data.message || 'No data received yet' };
+    }
+  } catch (e) {
+    hioNZState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkHIOBISync() {
+  try {
+    const resp = await fetch(WORKER + '?service=hio-bi-sync');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      hioBISyncState = { status: 'ok', label: 'Up to date', detail: 'Last sync: ' + data.lastSyncDate };
+    } else if (data.status === 'error') {
+      hioBISyncState = { status: 'error', label: 'Stale', detail: 'Last sync: ' + data.lastSyncDate };
+    } else {
+      hioBISyncState = { status: 'checking', label: 'Unknown', detail: data.message || 'No data received yet' };
+    }
+  } catch (e) {
+    hioBISyncState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkDearBISync() {
+  try {
+    const resp = await fetch(WORKER + '?service=dear-bi-sync');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      dearBISyncState = { status: 'ok', label: 'Up to date', detail: 'Last sync: ' + data.lastSyncDate };
+    } else if (data.status === 'error') {
+      dearBISyncState = { status: 'error', label: 'Stale', detail: 'Last sync: ' + data.lastSyncDate };
+    } else {
+      dearBISyncState = { status: 'checking', label: 'Unknown', detail: data.message || 'No data received yet' };
+    }
+  } catch (e) {
+    dearBISyncState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function checkSCPortal() {
+  try {
+    const resp = await fetch(WORKER + '?service=subcontractor');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    scPortalState = data.status === 'ok'
+      ? { status: 'ok', label: 'Online', detail: 'Login successful' }
+      : { status: 'error', label: 'Issue detected', detail: data.message || 'Login failed' };
+  } catch (e) {
+    scPortalState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+function martyStateFromData(data) {
+  if (data.status === 'ok') return { status: 'ok', label: 'All clear', detail: 'No records — ' + data.lastModified };
+  if (data.status === 'error') return { status: 'error', label: 'Action required', detail: 'Records found — ' + data.lastModified };
+  return { status: 'checking', label: 'Unknown', detail: data.message || 'File not found' };
+}
+
+async function checkMartyInvoices() {
+  try {
+    const resp = await fetch(WORKER + '?service=marty-invoices');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    martyInvoicesState = martyStateFromData(await resp.json());
+  } catch (e) { martyInvoicesState = { status: 'error', label: 'Failed', detail: e.message }; }
+  renderAll(); updateSummary();
+}
+
+async function checkMartyToilet() {
+  try {
+    const resp = await fetch(WORKER + '?service=marty-toilet');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    martyToiletState = martyStateFromData(await resp.json());
+  } catch (e) { martyToiletState = { status: 'error', label: 'Failed', detail: e.message }; }
+  renderAll(); updateSummary();
+}
+
+async function checkMartyRehires() {
+  try {
+    const resp = await fetch(WORKER + '?service=marty-rehires');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    martyRehiresState = martyStateFromData(await resp.json());
+  } catch (e) { martyRehiresState = { status: 'error', label: 'Failed', detail: e.message }; }
+  renderAll(); updateSummary();
+}
+
+async function checkMartyRehires3m() {
+  try {
+    const resp = await fetch(WORKER + '?service=marty-rehires3m');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    martyRehires3mState = martyStateFromData(await resp.json());
+  } catch (e) { martyRehires3mState = { status: 'error', label: 'Failed', detail: e.message }; }
+  renderAll(); updateSummary();
+}
+
+async function checkHermes() {
+  try {
+    const resp = await fetch(WORKER + '?service=hermes');
+    if (!resp.ok) throw new Error('Worker error ' + resp.status);
+    const data = await resp.json();
+    hermesState = data.status === 'ok'
+      ? { status: 'ok', label: 'Online', detail: 'Health check passed' }
+      : { status: 'error', label: 'Offline', detail: 'Response: ' + (data.response || data.error || 'unknown') };
+  } catch (e) {
+    hermesState = { status: 'error', label: 'Failed', detail: e.message };
+  }
+  renderAll(); updateSummary();
+}
+
+async function runChecks() {
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.classList.add('spinning');
+  sites.forEach((_,i) => { delete state[i]; delete state['rt'+i]; });
+  forms.forEach((_,i) => { delete formState[i]; delete formState['rt'+i]; });
+  mailchimpState   = { status: 'checking', label: 'Checking...', detail: '' };
+  stripeState      = { status: 'checking', label: 'Checking...', detail: '' };
+  zohoState        = { status: 'checking', label: 'Checking...', detail: '' };
+  autoReportsState = { status: 'checking', label: 'Checking...', detail: '' };
+  unpaidTasksState = { status: 'checking', label: 'Checking...', detail: '' };
+  martyInvoicesState  = { status: 'checking', label: 'Checking...', detail: '' };
+  martyToiletState    = { status: 'checking', label: 'Checking...', detail: '' };
+  martyRehiresState   = { status: 'checking', label: 'Checking...', detail: '' };
+  martyRehires3mState = { status: 'checking', label: 'Checking...', detail: '' };
+  hermesState      = { status: 'checking', label: 'Checking...', detail: '' };
+  scPortalState    = { status: 'checking', label: 'Checking...', detail: '' };
+  rdsState         = { status: 'checking', label: 'Checking...', detail: '' };
+  hioAUState       = { status: 'checking', label: 'Checking...', detail: '' };
+  hioNZState       = { status: 'checking', label: 'Checking...', detail: '' };
+  hioBISyncState   = { status: 'checking', label: 'Checking...', detail: '' };
+  dearBISyncState  = { status: 'checking', label: 'Checking...', detail: '' };
+  autoInvoiceState = { status: 'checking', label: 'Checking...', detail: '' };
+  prePaymentState  = { status: 'checking', label: 'Checking...', detail: '' };
+  document.getElementById('online-val').textContent = '—';
+  document.getElementById('offline-val').textContent = '—';
+  document.getElementById('last-checked').textContent = 'Checking...';
+  renderAll();
+  await Promise.all([
+    ...sites.map((_,i) => checkSite(i)),
+    ...forms.map((_,i) => checkForm(i)),
+    checkMailchimp(),
+    checkStripe(),
+    checkZoho(),
+    checkAutoReports(),
+    checkUnpaidTasks(),
+    checkPrePayment(),
+    checkAutoInvoice(),
+    checkRDS(),
+    checkHIOAU(),
+    checkHIONZ(),
+    checkHIOBISync(),
+    checkDearBISync(),
+    checkSCPortal(),
+    checkHermes(),
+    checkMartyInvoices(),
+    checkMartyToilet(),
+    checkMartyRehires(),
+    checkMartyRehires3m()
+  ]);
+  document.getElementById('last-checked').textContent = 'Last checked ' + formatTime();
+  btn.disabled = false;
+  btn.classList.remove('spinning');
+}
+
+document.getElementById('page-date').textContent = formatDateTime();
+runChecks();
+</script>
+</body>
+</html>
