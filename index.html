@@ -108,7 +108,7 @@
   <div class="summary-grid">
     <div class="metric-card">
       <div class="metric-label">Total checks</div>
-      <div class="metric-value" id="total-val">32</div>
+      <div class="metric-value" id="total-val">30</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">Online</div>
@@ -140,12 +140,6 @@
 
   <div class="section-label" style="margin-top:2rem">Email checks</div>
   <div class="sites-list" id="email-list"></div>
-
-  <div class="section-label" style="margin-top:2rem">Pre-Payment checks</div>
-  <div class="sites-list" id="prepayment-list"></div>
-
-  <div class="section-label" style="margin-top:2rem">Auto Invoice checks</div>
-  <div class="sites-list" id="autoinvoice-list"></div>
 
   <div class="section-label" style="margin-top:2rem">RDS checks</div>
   <div class="sites-list" id="rds-list"></div>
@@ -201,8 +195,6 @@ let stripeState      = { status: 'checking', label: '', detail: '' };
 let zohoState        = { status: 'checking', label: '', detail: '' };
 let autoReportsState = { status: 'checking', label: '', detail: '' };
 let unpaidTasksState = { status: 'checking', label: '', detail: '' };
-let prePaymentState  = { status: 'checking', label: '', detail: '' };
-let autoInvoiceState = { status: 'checking', label: '', detail: '' };
 let rdsState         = { status: 'checking', label: '', detail: '' };
 let tempoNZState    = { status: 'checking', label: '', detail: '' };
 let tempoAUState    = { status: 'checking', label: '', detail: '' };
@@ -278,15 +270,11 @@ function renderAll() {
   document.getElementById('stripe-list').innerHTML =
     apiRowHTML('Stripe — Latest successful payment', stripeState.status, stripeState.label, stripeState.detail);
   document.getElementById('zoho-list').innerHTML =
-    apiRowHTML('Zoho CRM — Latest HIO Quoting record', zohoState.status, zohoState.label, zohoState.detail);
+    apiRowHTML('Zoho CRM — Latest Tempo Quoting Record', zohoState.status, zohoState.label, zohoState.detail);
   document.getElementById('autoreports-list').innerHTML =
-    apiRowHTML('Auto Reports — AU + NZ HIO REPORTS', autoReportsState.status, autoReportsState.label, autoReportsState.detail);
+    apiRowHTML('Auto Reports — AU + NZ TEMPO REPORTS', autoReportsState.status, autoReportsState.label, autoReportsState.detail);
   document.getElementById('email-list').innerHTML =
     apiRowHTML('Unpaid Scheduled Tasks email', unpaidTasksState.status, unpaidTasksState.label, unpaidTasksState.detail);
-  document.getElementById('prepayment-list').innerHTML =
-    apiRowHTML('Pre-Payment Email Failures', prePaymentState.status, prePaymentState.label, prePaymentState.detail);
-  document.getElementById('autoinvoice-list').innerHTML =
-    apiRowHTML('Auto Invoice Processing Report', autoInvoiceState.status, autoInvoiceState.label, autoInvoiceState.detail);
   document.getElementById('rds-list').innerHTML =
     apiRowHTML('RDS Server (10.0.0.9)', rdsState.status, rdsState.label, rdsState.detail);
   document.getElementById('tempo-list').innerHTML =
@@ -320,8 +308,6 @@ function updateSummary() {
     zohoState.status === 'checking' ? null : zohoState.status,
     autoReportsState.status === 'checking' ? null : autoReportsState.status,
     (unpaidTasksState.status === 'checking' || unpaidTasksState.status === 'skipped') ? null : unpaidTasksState.status,
-    (prePaymentState.status === 'checking' || prePaymentState.status === 'skipped') ? null : prePaymentState.status,
-    (autoInvoiceState.status === 'checking' || autoInvoiceState.status === 'skipped') ? null : autoInvoiceState.status,
     (rdsState.status === 'checking' || rdsState.status === 'unknown') ? null : rdsState.status,
     (tempoAUState.status === 'checking' || tempoAUState.status === 'unknown') ? null : tempoAUState.status,
     (tempoNZState.status === 'checking' || tempoNZState.status === 'unknown') ? null : tempoNZState.status,
@@ -482,44 +468,6 @@ async function checkUnpaidTasks() {
       : { status: 'error', label: 'Not received', detail: 'Email not found today or yesterday' };
   } catch (e) {
     unpaidTasksState = { status: 'error', label: 'Failed', detail: e.message };
-  }
-  renderAll(); updateSummary();
-}
-
-async function checkPrePayment() {
-  if (isWeekend()) {
-    prePaymentState = { status: 'skipped', label: 'Not expected today', detail: 'No email on weekends' };
-    renderAll(); updateSummary();
-    return;
-  }
-  try {
-    const resp = await fetch(WORKER + '?service=prepayment');
-    if (!resp.ok) throw new Error('Worker error ' + resp.status);
-    const data = await resp.json();
-    prePaymentState = data.received
-      ? { status: 'ok', label: 'Received', detail: 'Arrived ' + data.when }
-      : { status: 'error', label: 'Not received', detail: 'Email not found for previous weekday' };
-  } catch (e) {
-    prePaymentState = { status: 'error', label: 'Failed', detail: e.message };
-  }
-  renderAll(); updateSummary();
-}
-
-async function checkAutoInvoice() {
-  if (isWeekend()) {
-    autoInvoiceState = { status: 'skipped', label: 'Not expected today', detail: 'No email on weekends' };
-    renderAll(); updateSummary();
-    return;
-  }
-  try {
-    const resp = await fetch(WORKER + '?service=autoinvoice');
-    if (!resp.ok) throw new Error('Worker error ' + resp.status);
-    const data = await resp.json();
-    autoInvoiceState = data.received
-      ? { status: 'ok', label: 'Received', detail: 'Arrived ' + data.when }
-      : { status: 'error', label: 'Not received', detail: 'Email not found for previous weekday' };
-  } catch (e) {
-    autoInvoiceState = { status: 'error', label: 'Failed', detail: e.message };
   }
   renderAll(); updateSummary();
 }
@@ -769,8 +717,6 @@ async function runChecks() {
   tempoNZState       = { status: 'checking', label: 'Checking...', detail: '' };
   tempoBISyncState   = { status: 'checking', label: 'Checking...', detail: '' };
   dearBISyncState  = { status: 'checking', label: 'Checking...', detail: '' };
-  autoInvoiceState = { status: 'checking', label: 'Checking...', detail: '' };
-  prePaymentState  = { status: 'checking', label: 'Checking...', detail: '' };
   document.getElementById('online-val').textContent = '—';
   document.getElementById('offline-val').textContent = '—';
   document.getElementById('last-checked').textContent = 'Checking...';
@@ -783,8 +729,6 @@ async function runChecks() {
     checkZoho(),
     checkAutoReports(),
     checkUnpaidTasks(),
-    checkPrePayment(),
-    checkAutoInvoice(),
     checkRDS(),
     checkTempoAU(),
     checkTempoNZ(),
